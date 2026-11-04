@@ -53,4 +53,5 @@ Sequential/Syntax.v
 Sequential/Operations.v
 Sequential/Denotation.v
 Sequential/ProgramProof.v
+Sequential/AtomicProof.v
 Extraction/Extract.v

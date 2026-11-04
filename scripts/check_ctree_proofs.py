@@ -25,11 +25,14 @@ async def main():
                     raise RuntimeError(f'{tool} failed')
                 return result
             await call('rocq_health')
-            for name in ['Memory', 'MemoryProof', 'Syntax', 'Operations', 'Denotation', 'ProgramProof']:
+            for name in ['Memory', 'MemoryProof', 'Syntax', 'Operations', 'Denotation', 'ProgramProof', 'AtomicProof']:
                 await call('rocq_compile_file', file=f'Sequential/{name}.v',
                            workspace=str(root), keep_vo=True, mode='full', include_warnings=False)
             for file, theorem in [('MemoryProof', 'embed_preserves_memory'),
-                                  ('ProgramProof', 'allocate_binds_ssa')]:
+                                  ('ProgramProof', 'allocate_binds_ssa'),
+                                  ('AtomicProof', 'atom_success_correspondence'),
+                                  ('AtomicProof', 'atom_failure_rollback'),
+                                  ('AtomicProof', 'atom_binding_failure_commits')]:
                 result = await call('rocq_assumptions', file=f'Sequential/{file}.v',
                                     name=theorem, workspace=str(root), timeout=120)
                 if result.get('assumptions'):

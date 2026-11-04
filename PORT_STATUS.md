@@ -43,8 +43,12 @@ copy with disjointness checks, not an assumed MTE command.
 ### Failure and commit contract
 
 A memory transaction commits only if the memory handler and its inner result
-both succeed. On failure, its partial writes are discarded. Previously completed
+both succeed. On transaction failure, its partial writes are discarded. Previously completed
 operations remain committed; there is no rollback of the entire function.
+SSA result-arity validation occurs after a successful transaction commits.
+A malformed instruction that allocates but declares no result therefore reports
+StaticProgramError while retaining the allocation, matching the old runner's
+post-operation result check. This is distinct from transaction rollback.
 Numeric/type failures retain the old primitive result semantics. Dynamic errors
 are distinct from `Unsupported`, `BudgetExhausted`, and `Deadlock`. No async
 scheduler exists; Deadlock is the explicit observation of a stuck tree, not an
@@ -81,7 +85,32 @@ Traces are delivered after each program invocation and cannot influence it.
    This is an allocation/SSA property of the actual program interpreter, not a
    theorem about all programs or all memory operations.
 
-Neither result is a conservativity theorem for the whole supported language,
+3. For any atomic operation, if its existing Free memory interpretation succeeds
+   and its SSA result binding succeeds, the CTree program interpreter returns
+   precisely that environment and committed memory, with its location trace.
+   `Sequential/AtomicProof.v: atom_success_correspondence` explicitly uses the
+   memory embedding theorem; it is not restricted to allocation.
+
+4. For any atomic operation, an outer Free-handler error or an inner semantic
+   error preserves the instruction-entry memory, discarding intermediate writes.
+   `atom_failure_rollback` includes budget exhaustion and Unsupported through the
+   status mapping. It does not roll back earlier completed instructions.
+
+5. For any atomic operation whose transaction succeeds but SSA binding fails,
+   `atom_binding_failure_commits` proves that the error is returned with the
+   committed memory. This distinguishes post-commit binding errors from rollback.
+
+All three atomic theorems were fully compiled and checked through local Rocq MCP;
+their assumption reports are empty.
+
+These atomic correspondence results share `eval_atom` with the CTree semantics;
+that reference is the existing Free handler, not an independently specified MLIR
+semantics or the old OCaml runner. Their fixed tree budget of three observations
+is sufficient for one atom with PDone; the memory sub-budget is universally
+quantified. They do not yet supply composition through arbitrary continuations,
+regions or loops.
+
+The proved results are not a conservativity theorem for the whole supported language,
 nor an equivalence theorem between the old OCaml runner and the new backend.
 Differential tests below are evidence, not a mechanized implementation equivalence.
 
@@ -99,6 +128,8 @@ Differential tests below are evidence, not a mechanized implementation equivalen
 - Explicit unsupported sync, tree budget exhaustion, missing SSA, zero/negative
   loop steps, memory transaction rollback, retention of prior commits, and
   cumulative budget exhaustion across multiple program IDs.
+- Post-commit SSA result-arity errors retain allocation identically in the new
+  backend and the old runner, tested through their interpreter entry points.
 - Existing attention tests were also run; their passing FlashAttention results
   belong to the old runner and do not imply new-backend FlashAttention coverage.
 
@@ -136,7 +167,7 @@ The VecAdd artifacts themselves contain no scf.for and are not loop evidence.
 - The existing host float64 numeric backend is reused. It is not NPU bit-accurate
   f16/f32 arithmetic, nor an arithmetic correctness proof. Tests deliberately use
   finite dyadic values for exact model-compatible comparison.
-- Extraction and the OCaml compiler/runtime are outside the two proofs. Existing
+- Extraction and the OCaml compiler/runtime are outside these proofs. Existing
   nat-to-OCaml-int extraction has machine-integer bounds; input guards remain.
   Extracted coinductive CTrees use the standard lazy extraction representation.
 - No port source disables guard, positivity, or universe checking; no new admits
@@ -167,7 +198,7 @@ destruction; this dependency is disclosed even though the port's headline
 proofs do not use them. ITree 5.2.1 also ships optional Axioms.v (guarded_choice)
 and Eq/EqAxiom.v (bisimulation_is_eq); these are not required by the port proofs.
 The proof-specific assumption reports, not the whole package's marketing claim,
-determine what the two proved results trust.
+determine what the proved results trust.
 
 ## Reproduce
 

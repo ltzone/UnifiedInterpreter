@@ -96,3 +96,20 @@ let () =
  | _ -> failwith "CTree budget reset between program IDs"
  | exception Ctree_backend.Budget_exhausted -> ());
  print_endline "CTree: one launch fits, two launches exhaust cumulative tree budget PASS"
+
+let () =
+ (* Result arity is checked after the transaction commits in both backends. *)
+ let file = "fixtures/ctree_live_view.mlir" in
+ let parsed = Parser.parse ~file (Attention.read_file file) in
+ let alloc = List.find (fun (op : Parser.operation) -> op.opcode = "memref.alloc") parsed.body in
+ let malformed = {alloc with result=None} in
+ let state = ref {Handlers.memory=E.empty_memory;marker=73} in
+ let ctx = {Runner.state;steps=0;max_steps=100;current=None;pid=0;calls=0;loops=[];trace=ignore} in
+ (match Runner.with_handlers ctx (fun () -> Runner.execute_block ctx [] [malformed]) with
+ | _ -> failwith "legacy accepted allocation without result"
+ | exception Source.Error (_,message) -> assert (message = "operation result count mismatch"));
+ let (status,after),_ = E.execute Numeric.scalar Numeric.hivm 3 2
+   (E.PAtom (0,None,E.AAlloc (E.ASDefault,[2],E.Float32Type),E.PDone)) [] E.empty_memory in
+ assert (status = E.SemanticError E.StaticProgramError);
+ assert (after = (!state).memory && after.memory_next_allocation = 1);
+ print_endline "CTree: post-commit SSA arity error matches legacy memory PASS"
