@@ -113,3 +113,33 @@ let () =
  assert (status = E.SemanticError E.StaticProgramError);
  assert (after = (!state).memory && after.memory_next_allocation = 1);
  print_endline "CTree: post-commit SSA arity error matches legacy memory PASS"
+
+let () =
+ (* Independent state-transformer reference: compare every budget, not just
+    successful executions. Includes nested scope and loop overflow/errors. *)
+ let z = Numeric.z_of_int in
+ let int n = E.SVInt (E.IndexType,z n) in
+ let atom op next = E.PAtom (7,Some 9,op,next) in
+ let alloc = E.AAlloc (E.ASDefault,[2],E.Float32Type) in
+ let body = E.PIf (8,3,atom alloc E.PDone,E.PDone,E.PDone) in
+ let programs = [E.PDone;atom alloc (atom alloc E.PDone);
+   E.PAtom (7,None,alloc,E.PDone);
+   E.PAtom (7,None,E.AUnsupported,E.PDone);
+   E.PIf (8,0,body,atom alloc E.PDone,body);
+   E.PFor (6,3,0,1,2,body,body);
+   E.PFor (6,3,0,1,2,E.PFor (5,4,0,1,2,body,E.PDone),body);
+   E.PFor (6,3,0,1,2,E.PAtom (7,None,E.AUnsupported,E.PDone),body)] in
+ let envs = [List.mapi (fun n v -> n,int v) [0;0;1];
+   List.mapi (fun n v -> n,int v) [0;3;1];
+   List.mapi (fun n v -> n,int v) [1;3;0];
+   [0,E.SVInt(E.IntegerType(8,E.Signless),z 126);
+    1,E.SVInt(E.IntegerType(8,E.Signless),z 127);
+    2,E.SVInt(E.IntegerType(8,E.Signless),z 2)]; []] in
+ let checked = ref 0 in
+ List.iter (fun p -> List.iter (fun env ->
+  List.iter (fun mf -> for fuel = 0 to 80 do
+   let tree = E.execute_budget Numeric.scalar Numeric.hivm fuel mf p env E.empty_memory in
+   let reference = E.reference_execute Numeric.scalar Numeric.hivm fuel mf p env E.empty_memory in
+   assert (tree = reference); incr checked
+  done) [0;1;2;8]) envs) programs;
+ Printf.printf "CTree: %d exact reference comparisons (status/state/log/remaining budget) PASS\n%!" !checked

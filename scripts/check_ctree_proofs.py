@@ -25,14 +25,25 @@ async def main():
                     raise RuntimeError(f'{tool} failed')
                 return result
             await call('rocq_health')
-            for name in ['Memory', 'MemoryProof', 'Syntax', 'Operations', 'Denotation', 'ProgramProof', 'AtomicProof']:
+            for name in ['Memory', 'MemoryProof', 'Syntax', 'Operations', 'Denotation',
+                         'ProgramProof', 'AtomicProof', 'Reference', 'RunFacts',
+                         'FuelFacts', 'PrimitiveProof', 'BindAssoc', 'LoopProof',
+                         'Conservativity']:
                 await call('rocq_compile_file', file=f'Sequential/{name}.v',
                            workspace=str(root), keep_vo=True, mode='full', include_warnings=False)
             for file, theorem in [('MemoryProof', 'embed_preserves_memory'),
                                   ('ProgramProof', 'allocate_binds_ssa'),
                                   ('AtomicProof', 'atom_success_correspondence'),
                                   ('AtomicProof', 'atom_failure_rollback'),
-                                  ('AtomicProof', 'atom_binding_failure_commits')]:
+                                  ('AtomicProof', 'atom_binding_failure_commits'),
+                                  ('RunFacts', 'run_tbind_reference'),
+                                  ('FuelFacts', 'run_tree_budget_remaining_le'),
+                                  ('PrimitiveProof', 'run_transaction_reference'),
+                                  ('BindAssoc', 'run_bind_assoc'),
+                                  ('BindAssoc', 'run_bind_congr'),
+                                  ('LoopProof', 'run_loop_reference'),
+                                  ('Conservativity', 'program_conservativity'),
+                                  ('Conservativity', 'execute_conservativity')]:
                 result = await call('rocq_assumptions', file=f'Sequential/{file}.v',
                                     name=theorem, workspace=str(root), timeout=120)
                 if result.get('assumptions'):

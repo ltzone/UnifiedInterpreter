@@ -103,16 +103,47 @@ Traces are delivered after each program invocation and cannot influence it.
 All three atomic theorems were fully compiled and checked through local Rocq MCP;
 their assumption reports are empty.
 
-These atomic correspondence results share `eval_atom` with the CTree semantics;
-that reference is the existing Free handler, not an independently specified MLIR
-semantics or the old OCaml runner. Their fixed tree budget of three observations
-is sufficient for one atom with PDone; the memory sub-budget is universally
-quantified. They do not yet supply composition through arbitrary continuations,
-regions or loops.
+6. **Whole-program conservativity:** `Sequential/Conservativity.v` proves
+   `program_conservativity` for every represented program, arbitrary initial SSA
+   environment/memory/log, and every execution and memory budget. The public
+   `execute_conservativity` corollary states:
 
-The proved results are not a conservativity theorem for the whole supported language,
-nor an equivalence theorem between the old OCaml runner and the new backend.
-Differential tests below are evidence, not a mechanized implementation equivalence.
+   ```text
+   execute_budget(fuel, memory_fuel, program, env, memory)
+     = reference_execute(fuel, memory_fuel, program, env, memory)
+   ```
+
+   Equality includes status (success, semantic error, Unsupported, budget
+   exhaustion or Deadlock), returned SSA environment when successful, final
+   memory, operation trace, and remaining execution budget. The structural
+   induction covers arbitrary instruction sequences, either branch, nested
+   regions, and nested supported loops—not only VecAdd or terminating examples.
+   The theorem has no well-formedness or successful-execution premise.
+
+   `Sequential/Reference.v` independently defines sequential control and state
+   threading using ordinary functions and a structurally recursive bounded loop.
+   It does not call CTree, `denote`, `run_tree_budget`, or the old runner. It shares
+   the existing atom evaluator, SSA/type/numeric primitives, status definitions,
+   and original finite Free memory handler; therefore this is conservativity of
+   program control/interpretation relative to those primitives, not an independent
+   specification of every MLIR opcode or a proof of the old OCaml implementation.
+
+   Bind correspondence accounts for the eliminated return observation by
+   restoring one unit of budget. A continuing loop spends that unit on a Guard.
+   `run_loop_reference` proves the separate recursive loop bound cannot truncate
+   before execution fuel when the body is an actual tree runner. The proof uses
+   the remaining-budget bound, not an assumed fuel-monotonicity axiom.
+
+   All results are about the actual budgeted backend and hold for every finite
+   budget, including exhausted runs. No separate unbounded coinductive divergence
+   or hardware scheduling theorem is claimed. Both headline whole-program
+   theorems were fully compiled through local MCP and report no axioms; bind,
+   transaction and loop lemmas likewise have empty assumption reports.
+
+This completes the whole represented sequential-language correspondence target.
+The parser/host AST conversion and extraction remain outside this theorem. The
+new/legacy OCaml differential agreement remains test evidence, not a mechanized
+implementation-equivalence theorem. Unsupported MLIR forms remain unsupported.
 
 ## Tested
 
@@ -130,6 +161,10 @@ Differential tests below are evidence, not a mechanized implementation equivalen
   cumulative budget exhaustion across multiple program IDs.
 - Post-commit SSA result-arity errors retain allocation identically in the new
   backend and the old runner, tested through their interpreter entry points.
+- Direct sequential reference versus CTree: 12,960 exact comparisons of status,
+  memory, operation log and remaining fuel. Budgets 0–80 and memory budgets
+  0/1/2/8 cover sequencing, both branches, nested loops, zero iterations,
+  missing SSA, invalid steps, induction overflow, Unsupported and commit errors.
 - Existing attention tests were also run; their passing FlashAttention results
   belong to the old runner and do not imply new-backend FlashAttention coverage.
 
@@ -234,9 +269,9 @@ The backend option is also available on `Vector_add.run` and `Kernel.run` as
 |---|---|---|
 | Parser.parse, xDSL frontend | unchanged host parser + ctree_backend.compile | unverified |
 | Runner.get / result environment update | Rocq lookup / bind_result | program definition + allocation/SSA lemma |
-| execute_block sequencing | Rocq denote and CTree.bind | definition accepted, not whole-language equivalence |
-| scf.if regions | Rocq denote | branch scope restored; tests |
-| scf.for control / induction update | Rocq loop / CTree.iter + existing arithmetic | positive step, overflow check; tests |
+| execute_block sequencing | Rocq denote and CTree.bind | whole-program correspondence to direct Rocq reference |
+| scf.if regions | Rocq denote | reference correspondence, branch scope restored; tests |
+| scf.for control / induction update | Rocq loop / CTree.iter + existing arithmetic | reference correspondence, positive step, overflow check; tests |
 | execute_op dispatch | Rocq eval_atom for supported subset | primitives reused; unsupported rejected |
 | Memory effect handler | CTree transaction + embedded Free handler | embedding theorem; atomicity tests |
 | tensor/view materialization | Rocq read_tensor at read sites | descriptor/liveness tests |

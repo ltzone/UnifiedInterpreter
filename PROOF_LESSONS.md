@@ -12,3 +12,15 @@
   intermediate memory, whereas SSA binding happens after transaction commit.
   A result-arity error therefore retains committed memory. Do not state a blanket
   "all instruction errors roll back" theorem.
+
+- For error-aware bind, separately running a successful sub-tree spends a return
+  observation that bind eliminates. The direct reference restores one unit before
+  running its continuation. Loop continuation consumes that unit as a Guard, so
+  it instead recurs at the body's returned budget.
+- State-transformer extensionality can remain pointwise: prove runner bind
+  associativity and continuation congruence by fuel induction. Do not introduce
+  functional extensionality or a coinductive tree equality axiom just to rewrite
+  nested binds.
+- A bounded reference loop needs a fuel-monotone body. A generic reference
+  computation can fabricate remaining fuel; pointwise correspondence to the
+  actual runner supplies the required remaining-budget bound.

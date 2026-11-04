@@ -54,4 +54,11 @@ Sequential/Operations.v
 Sequential/Denotation.v
 Sequential/ProgramProof.v
 Sequential/AtomicProof.v
+Sequential/Reference.v
+Sequential/RunFacts.v
+Sequential/FuelFacts.v
+Sequential/PrimitiveProof.v
+Sequential/BindAssoc.v
+Sequential/LoopProof.v
+Sequential/Conservativity.v
 Extraction/Extract.v

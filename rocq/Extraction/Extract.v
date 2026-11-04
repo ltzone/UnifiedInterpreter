@@ -13,13 +13,13 @@ From UnifiedInterpreter.HIVM Require Import Semantics Arith Execution.
 From UnifiedInterpreter.HFusion.Semantics Require Import Structured.
 From UnifiedInterpreter.Examples Require Import HIVMCompute HIVMMemory HIVMExceptional.
 
-From UnifiedInterpreter.Sequential Require Import Denotation.
+From UnifiedInterpreter.Sequential Require Import Denotation Reference.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "Extraction".
 
 Extraction "unified_semantics.ml"
-  execute execute_budget
+  execute execute_budget reference_execute
   smoke_result
   view_example
   read_view
