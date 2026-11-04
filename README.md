@@ -1,5 +1,9 @@
 # UnifiedInterpreter
 
+The experimental `--backend ctree` sequential interpreter moves function-body
+SSA and control flow into Rocq/Choice Trees. See [PORT_STATUS](PORT_STATUS.md)
+for reproducible commands, proofs, real-MLIR tests, and the precise trust boundary.
+
 UnifiedInterpreter is an OCaml 5 prototype for a unified, effect-based
 interpreter design inspired by the Huawei AscendNPU IR interpreter question.
 

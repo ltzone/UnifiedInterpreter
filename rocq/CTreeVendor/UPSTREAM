@@ -1,0 +1,6 @@
+https://github.com/vellvm/ctrees
+cabcf9bf24b0f459204a7da19ac01b7697ff04e3
+Unmodified core subset: theories/CTree.v and theories/Core/*.v.
+No Eq/Interp modules imported. Those upstream modules include disabled universe
+checking and admitted recursion facts; they are outside this dependency closure.
+Core inversion lemmas use JMeq_eq; new proofs must report their own assumptions.

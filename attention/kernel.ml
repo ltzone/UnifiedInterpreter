@@ -4,9 +4,10 @@ type binding = Input of float array | Output
 type output = { name : string; shape : int list; data : float array }
 type result = { outputs : output list; steps : int; calls : int }
 
-let run ?stage ?(max_steps=1000000) ?(trace=fun _ -> ()) ~file bindings =
+let run ?(backend=`Legacy) ?stage ?(max_steps=1000000) ?(trace=fun _ -> ()) ~file bindings =
   if max_steps <= 0 then invalid_arg "max_steps must be positive";
   let program = Parser.parse ~file (Attention.read_file file) in
+  let compiled = match backend with `Legacy -> None | `CTree -> Some (Ctree_backend.compile program) in
   Validate.kernel ?stage program;
   let names = List.map fst bindings in
   if List.length names <> List.length (List.sort_uniq String.compare names) then
@@ -30,6 +31,7 @@ let run ?stage ?(max_steps=1000000) ?(trace=fun _ -> ()) ~file bindings =
         | Output -> ());
         name,shape,binding
     | _ -> invalid_arg "kernel entry requires static f32 memref arguments") program.arguments in
+  let budget = ref max_steps in
   let state = ref {Handlers.memory=E.empty_memory;marker=73} in
   let ctx = {Runner.state;steps=0;max_steps;current=None;pid=0;calls=0;loops=[];trace} in
   Runner.with_handlers ctx (fun () ->
@@ -44,7 +46,8 @@ let run ?stage ?(max_steps=1000000) ?(trace=fun _ -> ()) ~file bindings =
       name,shape,binding,id) arguments in
     let env = List.map (fun (name,shape,_,id) ->
       name,Runner.Memref (id,shape,E.Float32Type)) allocated in
-    ignore (Runner.execute_block ctx env program.body);
+    (match compiled with None -> ignore (Runner.execute_block ctx env program.body)
+    | Some compiled -> Ctree_backend.run ctx ~budget compiled env);
     ctx.current <- None;
     let outputs = List.filter_map (fun (name,shape,binding,id) ->
       match binding with

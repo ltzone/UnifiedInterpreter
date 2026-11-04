@@ -71,3 +71,15 @@
   ../scripts/attention_frontend.py
   ../scripts/attention_dialects.py
   ../requirements-attention.txt))
+
+(test
+ (name ctree_test)
+ (modules ctree_test)
+ (libraries attention_runtime)
+ (deps
+  (glob_files fixtures/ctree_*.mlir)
+  fixtures/dynamic_slices.mlir
+  ../artifacts/kernel_IR/vector-add/hfusion.mlir
+  ../artifacts/kernel_IR/vector-add/hivm.mlir
+  ../scripts/attention_frontend.py
+  ../scripts/attention_dialects.py))

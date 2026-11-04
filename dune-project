@@ -11,6 +11,9 @@
   (ocaml (>= 5.0))
   dune
   rocq-prover
-  rocq-stdpp
+  (rocq-stdpp (= 1.13.0))
+  (coq-ext-lib (= 0.13.1))
+  (coq-itree (= 5.2.1))
+  (rocq-coinduction (= 1.21))
   zarith
   yojson))

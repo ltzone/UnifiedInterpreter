@@ -2,7 +2,7 @@ module E = Extracted_semantics.Unified_semantics
 module R = Runner
 open Parser
 
-let run ?stage ?(max_steps=1000000) ?(trace=ignore) ~file a b =
+let run ?(backend=`Legacy) ?stage ?(max_steps=1000000) ?(trace=ignore) ~file a b =
   if max_steps <= 0 then invalid_arg "max_steps must be positive";
   let n = Array.length a in
   if n <> Array.length b || n > 2147483647 then invalid_arg "invalid vector-add input lengths";
@@ -27,7 +27,9 @@ let run ?stage ?(max_steps=1000000) ?(trace=ignore) ~file a b =
       Source.fail op.span ("unsupported implicit vector-add argument " ^ name)) unused;
     check op.region; check op.else_region) ops in
   check program.body;
+  let compiled = match backend with `Legacy -> None | `CTree -> Some (Ctree_backend.compile program) in
   Validate.kernel ?stage program;
+  let budget = ref max_steps in
   let state = ref {Handlers.memory=E.empty_memory;marker=73} in
   let ctx = {R.state;steps=0;max_steps;current=None;pid=0;calls=0;loops=[];trace} in
   R.with_handlers ctx (fun () ->
@@ -52,7 +54,8 @@ let run ?stage ?(max_steps=1000000) ?(trace=ignore) ~file a b =
       let env = List.map2 (fun (name,_) value -> name,value) args values in
       let env = match ffts with None -> env
         | Some name -> (name,R.Int (scalar_type "i64",E.Z0))::env in
-      ignore (R.execute_block ctx env program.body)
+      (match compiled with None -> ignore (R.execute_block ctx env program.body)
+      | Some compiled -> Ctree_backend.run ctx ~budget compiled env)
     done;
     ctx.current <- None;
     let tensor = Effect.perform (Handlers.Memory ("materialize_output",E.materialize

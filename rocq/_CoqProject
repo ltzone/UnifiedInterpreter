@@ -1,4 +1,10 @@
 -Q . UnifiedInterpreter
+-Q CTreeVendor CTree
+
+CTreeVendor/Core/Utils.v
+CTreeVendor/Core/Index.v
+CTreeVendor/Core/CTreeDefinitions.v
+CTreeVendor/CTree.v
 
 Base/Result.v
 Base/Free.v
@@ -41,4 +47,10 @@ Examples/HIVMCompute.v
 Examples/HIVMMemory.v
 Examples/HIVMExceptional.v
 Examples/AttentionStructured.v
+Sequential/Memory.v
+Sequential/MemoryProof.v
+Sequential/Syntax.v
+Sequential/Operations.v
+Sequential/Denotation.v
+Sequential/ProgramProof.v
 Extraction/Extract.v

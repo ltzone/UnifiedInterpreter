@@ -5,8 +5,9 @@ let numbers data = `List (Array.to_list (Array.map (fun x -> `Float x) data))
 let main () =
   let kernel = ref "vector-add" and stage = ref "both" and ir = ref "" in
   let output = ref "" and trace = ref "" and max_steps = ref 1000000 in
-  let length = ref None in
+  let length = ref None and backend = ref "legacy" in
   Arg.parse [
+    "--backend",Arg.Set_string backend,"legacy|ctree (default legacy)";
     "--kernel",Arg.Set_string kernel,"vector-add|row-sum (default vector-add)";
     "--stage",Arg.Set_string stage,"hfusion|hivm|mixed|both (default both)";
     "--ir",Arg.Set_string ir,"MLIR file for a single stage";
@@ -18,6 +19,8 @@ let main () =
   if not (List.mem !stage ["hfusion";"hivm";"mixed";"both"]) then
     invalid_arg "invalid stage";
   if !stage = "both" && !ir <> "" then invalid_arg "--ir requires a single stage";
+  let backend = match !backend with "legacy" -> `Legacy | "ctree" -> `CTree
+    | _ -> invalid_arg "invalid backend" in
   let example = Kernel_examples.get !kernel in
   let channel = if !trace = "" then None else Some (open_out !trace) in
   Fun.protect ~finally:(fun () -> Option.iter close_out channel) (fun () ->
@@ -37,11 +40,11 @@ let main () =
         if n < 0 || n > 2147483647 then invalid_arg "invalid vector-add length";
         let a = Array.init n (fun i -> float_of_int (i mod 31 - 15) /. 4.) in
         let b = Array.init n (fun i -> float_of_int (i mod 17 - 8) /. 8.) in
-        Vector_add.run ~stage ~max_steps:!max_steps ~trace:emit ~file a b,
+        Vector_add.run ~backend ~stage ~max_steps:!max_steps ~trace:emit ~file a b,
         Array.map2 ( +. ) a b
       end else begin
         if !length <> None then invalid_arg "--length requires a compiled vector-add IR";
-        Kernel.run ~stage ~max_steps:!max_steps ~trace:emit ~file example.bindings, example.expected
+        Kernel.run ~backend ~stage ~max_steps:!max_steps ~trace:emit ~file example.bindings, example.expected
       end in
       let data = match result.outputs with
         | [output] when output.name = "%out" -> output
@@ -64,6 +67,10 @@ let main () =
 
 let () =
   try main () with
+  | Ctree_backend.Unsupported opcode -> Printf.eprintf "Unsupported: %s\n%!" opcode; exit 2
+  | Ctree_backend.Budget_exhausted -> prerr_endline "BudgetExhausted"; exit 3
+  | Ctree_backend.Deadlock -> prerr_endline "Deadlock"; exit 4
+  | Handlers.Semantic_error _ -> prerr_endline "SemanticError"; exit 1
   | Source.Error (span,message) ->
       Printf.eprintf "%s: %s\n%!" (Source.describe span) message;exit 1
   | Invalid_argument message | Failure message ->
