@@ -193,81 +193,102 @@ P ::={}
 
 \litao{Below are work in progress.}
 
-\section{良构}
-
-$\Gamma$ 把有限个变量映到类别。标量算子由 $\Delta(g)=(\bar\tau,\tau)$ 给出参数类别和结果类别。数据运算由 $\Sigma(f,p)=\bar\tau$ 给出：在管道 $p$ 上发射 $f\in\mathsf{Operator}_d$ 时参数应有的类别。各条指令流从空环境分别推导，环境不共享。判断 $\vdash_d$ 里的 $d$ 是这条流的种类 $\mathsf{kind}(s)$，并且 $s\in\kappa$。
-
-\[
+\clearpage
+\section{良构与基本类型检查}
+\label{sec:wf}
+本节只检查基本类别、变量作用域和指令/管道的适配，不检查同步是否充分。
+固定硬件参数与 $\kappa$；对 $s\in\kappa$，记
+$D_s=\mathsf{Pipe}_{\mathsf{kind}(s)}$、
+$O_s=\{t\in\kappa\mid\mathsf{kind}(t)\ne\mathsf{kind}(s)\}$。
+\begingroup\small
+\setlength{\abovedisplayskip}{5pt}\setlength{\belowdisplayskip}{5pt}
+\begin{equation*}
 \begin{gathered}
-\infer{\Gamma(x)=\tau}{\Gamma\vdash x:\tau}
+\Gamma:\mathsf{Var}\rightharpoonup\mathsf{Type},\qquad
+\mathsf{lit}(c)=\tau,\qquad
+\Delta(g)=(\bar\tau,\tau),\qquad \Sigma(f,p)=\bar\tau.\\
+\mathsf{Type}=\{\mathsf{int},\mathsf{float},\mathsf{bool},\mathsf{event},\mathsf{view}\}.
+\end{gathered}
+\end{equation*}
+\noindent 同步指令 $a$ 的静态管道条件 $\mathsf{ok}_s(a)$ 如下（事件操作数另行检查）：
+\[
+\begin{array}{@{}ll@{}}
+a & \mathsf{ok}_s(a)\\\hline
+\kw{setflag}[p,q](v),\ \kw{waitflag}[p,q](v)
+ & p,q\in D_s\ \land\ p\ne q\\
+\kw{syncblockset}[p,q](v)
+ & O_s\ne\varnothing\ \land\ p\in D_s\ \land\ q\in D_s\cup\{\mathsf S\}\ \land\ p\ne q\\
+\kw{syncblockwait}[p,q](v)
+ & O_s\ne\varnothing\ \land\ p\in\mathsf{Pipe}\ \land\ q\in D_s\cup\{\mathsf S\}\ \land\ p\ne q
+\end{array}
+\]
+\begin{equation*}
+\begin{gathered}
+\infer{\Gamma(x)=\tau}{\Gamma\vdash x:\tau}\;\hypertarget{wf-var}{\textsc{Var}}
 \qquad
-\infer{c\ \text{的类别为}\ \tau}{\Gamma\vdash c:\tau}\\[1.1em]
-\infer{
-  \Delta(g)=(\bar\tau,\tau)
-  \quad
-  \Gamma\vdash\bar v:\bar\tau
-  \quad
-  x\notin\mathrm{dom}(\Gamma)
-  \quad
-  \Gamma,x:\tau\vdash_d C
-}{
-  \Gamma\vdash_d \kw{let}\ x=\kw{scalar}[g](\bar v)\ \kw{in}\ C
-}\\[1.1em]
-\infer{
-  p\in\mathsf{Pipe}_d
-  \quad
-  f\in\mathsf{Operator}_d
-  \quad
-  \Sigma(f,p)=\bar\tau
-  \quad
-  \Gamma\vdash\bar v:\bar\tau
-  \quad
-  \Gamma\vdash_d C
-}{
-  \Gamma\vdash_d \kw{issue}[p](f,\bar v);\ C
-}
+\infer{\mathsf{lit}(c)=\tau}{\Gamma\vdash c:\tau}\;\hypertarget{wf-lit}{\textsc{Lit}}
+\qquad
+\infer{|\bar v|=|\bar\tau|\quad\forall i.\ \Gamma\vdash v_i:\tau_i}
+ {\Gamma\vdash\bar v:\bar\tau}\;\hypertarget{wf-tuple}{\textsc{Tuple}}\\[1em]
+\infer{\Delta(g)=(\bar\tau,\tau)\quad\Gamma\vdash\bar v:\bar\tau\quad
+ x\notin\mathrm{dom}(\Gamma)\quad\Gamma,x:\tau\vdash_s C}
+ {\Gamma\vdash_s\kw{let}\ x=\kw{scalar}[g](\bar v)\ \kw{in}\ C}
+ \;\hypertarget{wf-let}{\textsc{Let}}\\[1em]
+\infer{p\in D_s\quad f\in\mathsf{Operator}_{\mathsf{kind}(s)}\quad
+ \Sigma(f,p)=\bar\tau\quad\Gamma\vdash\bar v:\bar\tau\quad\Gamma\vdash_s C}
+ {\Gamma\vdash_s\kw{issue}[p](f,\bar v);\ C}
+ \;\hypertarget{wf-issue}{\textsc{Issue}}\\[1em]
+\infer{\mathsf{ok}_s(a)\quad\Gamma\vdash v:\mathsf{event}\quad\Gamma\vdash_s C}
+ {\Gamma\vdash_s a;\ C}\;\hypertarget{wf-sync}{\textsc{Sync}}
+\qquad
+\infer{p\in D_s\cup\{\mathsf{ALL}\}\quad\Gamma\vdash_s C}
+ {\Gamma\vdash_s\kw{pipebarrier}[p];\ C}\;\hypertarget{wf-bar}{\textsc{Bar}}\\[1em]
+\infer{\Gamma\vdash v:\mathsf{bool}\quad\Gamma\vdash_s C_1\quad\Gamma\vdash_s C_2}
+ {\Gamma\vdash_s\kw{if}\ v\ \kw{then}\ \{C_1\}\ \kw{else}\ \{C_2\}}
+ \;\hypertarget{wf-if}{\textsc{If}}\\[1em]
+\infer{\Gamma\vdash v_1,v_2,v_3:\mathsf{int},\mathsf{int},\mathsf{int}\quad
+ x\notin\mathrm{dom}(\Gamma)\quad\Gamma,x:\mathsf{int}\vdash_s C_1\quad\Gamma\vdash_s C_2}
+ {\Gamma\vdash_s\kw{for}\ x=v_1\ \kw{to}\ v_2\ \kw{step}\ v_3\ \kw{do}\ \{C_1\};\ C_2}
+ \;\hypertarget{wf-for}{\textsc{For}}\\[1em]
+\infer{\Gamma\vdash\bar v:\bar\tau}{\Gamma\vdash_s\kw{return}(\bar v)}
+ \;\hypertarget{wf-return}{\textsc{Return}}
+\qquad
+\infer{}{\Gamma\vdash_s\kw{end}}\;\hypertarget{wf-end}{\textsc{End}}\\[1em]
+\infer{\forall s\in\kappa.\ \varnothing\vdash_s C_s}
+ {\vdash_\kappa\mathop{\Big\|}_{s\in\kappa}s\{C_s\}}
+ \;\hypertarget{wf-program}{\textsc{Program}}
 \end{gathered}
-\]
+\end{equation*}
+\noindent \textsc{Sync} 中 $a$ 是上表四种命令之一，$v$ 是它的事件操作数。
+循环仍采用原有结构限制：循环体不含嵌套 \kw{for}，每条非 \kw{return} 路径以 \kw{end} 结束；程序顶层不使用 \kw{end}。
+\endgroup
+\clearpage
+\paragraph{基本类别与检查边界。}
+\hyperlink{wf-lit}{\textsc{Lit}} 的 $\mathsf{lit}$ 由配置给出且单值：普通整数常量的类别是
+$\mathsf{int}$，事件标识常量（如 $\varepsilon_0$）的类别是 $\mathsf{event}$，
+视图描述符常量的类别是 $\mathsf{view}$，不因底层编码为整数而混同。
+$\mathsf{view}$ 表示可寻址区域的描述符，不是该区域里的数据值；具体布局与足迹仍由
+已有的 $\mathsf{foot}$ 解释。\hyperlink{wf-tuple}{\textsc{Tuple}} 同时检查参数个数与逐项类别。
+例如配置可以声明
+$\Delta(\mathsf{makeView})=(\mathsf{int}^3,\mathsf{view})$，
+$\Sigma(\mathsf{Copy},\mathsf{MTE2})=(\mathsf{view},\mathsf{view})$，
+其中 $\mathsf{int}^3$ 表示三个整数参数；实际算子签名以所选 IR 实例为准。
+因此在要求 view 的位置传整数、在同步位置传 view、或使用未绑定变量都会被拒绝。
 
-核内同步要求两端都是本指令流的数据管道，且 $p\neq q$。块同步的置位命令要求置位管道 $p$ 属于本指令流的种类；等待管道可以是 $\mathsf{S}$。等待命令出现在执行等待的那一条指令流上，因此 $p$ 可以是另一条指令流的数据管道。
-\[
-\begin{gathered}
-\infer{
-  p,q\in\mathsf{Pipe}_d
-  \quad p\neq q
-  \quad
-  \Gamma\vdash v:\mathsf{event}
-  \quad
-  \Gamma\vdash_d C
-}{
-  \Gamma\vdash_d \kw{setflag}[p,q](v);\ C
-}\\[1.0em]
-\infer{
-  p\in\mathsf{Pipe}_d
-  \quad
-  q\in\mathsf{Pipe}_d\cup\{\mathsf{S}\}
-  \quad p\neq q
-  \quad
-  \Gamma\vdash v:\mathsf{event}
-  \quad
-  \Gamma\vdash_d C
-}{
-  \Gamma\vdash_d \kw{syncblockset}[p,q](v);\ C
-}
-\end{gathered}
-\]
-$\kw{waitflag}$ 与 $\kw{setflag}$ 的前提相同。$\kw{syncblockwait}[p,q](v)$ 要求 $q\in\mathsf{Pipe}_{\mathsf{kind}(s)}\cup\{\mathsf{S}\}$、$p\neq q$，并且 $v$ 为 $\mathsf{event}$；$p$ 不必属于 $\mathsf{Pipe}_{\mathsf{kind}(s)}$。$\kw{pipebarrier}[p]$ 要求 $p\in\mathsf{Pipe}_{\mathsf{kind}(s)}\cup\{\mathsf{ALL}\}$。$\kw{syncblockset}$ 与 $\kw{syncblockwait}$ 还要求 $\kappa$ 中存在 $\mathsf{kind}$ 不同的另一条指令流。
+\hyperlink{wf-let}{\textsc{Let}} 仅通过 $\Delta$ 绑定标量结果；
+\hyperlink{wf-issue}{\textsc{Issue}} 仅检查 $\Sigma$ 与可用管道，不引入数据结果变量。
+\hyperlink{wf-sync}{\textsc{Sync}} 检查 event 类别与管道条件，暂保留原稿的块同步端点约束；静态可用性不等于实际 set/wait 已配对。
+\textbf{待讨论：}原稿对块置位的 $q$ 按发送流检查，而后文把它用作接收流的等待管道；
+块等待的 $p$ 也未限定为某个发送流的数据管道。确定通知/接收语义后，应一起收紧这两项，
+本轮不默改这一设计。
+\hyperlink{wf-for}{\textsc{For}} 的循环变量只在循环体内可见；
+\hyperlink{wf-return}{\textsc{Return}} 不规定返回签名，但每个返回操作数必须可定型。
+\hyperlink{wf-program}{\textsc{Program}} 中各条流的变量环境互不共享。
 
-$\kw{if}$ 的条件为 $\mathsf{bool}$，两支在同一个 $\Gamma$ 下良构。$\kw{for}$ 的三个界为 $\mathsf{int}$，循环变量是新名字，循环体与循环后的命令都良构。循环体不含 $\kw{for}$。循环体里每条不以 $\kw{return}$ 结束的路径以 $\kw{end}$ 结束。$\kw{end}$ 与 $\kw{return}(\bar v)$ 在任意 $\Gamma$ 下良构。程序良构当且仅当每条指令流在自己的种类下良构：
-\[
-\infer{
-  \forall s\in\kappa.\ 
-  \varnothing\vdash_{\mathsf{kind}(s)} C_s
-}{
-  \vdash_\kappa \mathop{\Big\|}_{s\in\kappa} s\{C_s\}
-}
-\]
-良构不要求 flag 已经置位，不要求存储已初始化，也不要求足迹互不相交。缺少同步的程序仍是合法项。
+这是一项可按语法递归执行的基本 type check，不是同步正确性证明。
+它不要求 flag 已置位、存储已初始化或 view 互不重叠，也不证明地址边界、实际内存空间可访问性、
+循环步长非零、无竞争或无死锁；这些属于后续动态语义、配置约束或验证目标。
+缺少同步的程序仍可通过基本类型检查，从而让语义暴露其错误执行。
 
 \section{状态与参数}
 
