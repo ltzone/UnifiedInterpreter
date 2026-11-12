@@ -10,21 +10,29 @@
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\kw}[1]{\ensuremath{\mathsf{#1}}}
 \newcommand{\infer}[2]{\displaystyle\frac{\displaystyle #1}{\displaystyle #2}}
+\usepackage{xcolor}
+%%%%%%%%%%%%%% Notation macros %%%%%%%%%%%%%%
+\newcommand{\an}[3]{{\color{#2} \textsc{#1}:#3}}
+\newcommand{\litao}[1]{\an{litao}{red}{#1}}
+
 \hypersetup{pdftitle={Core Language Operational Semantics},pdfauthor={}}
 \begin{document}
 \begin{center}
 \Large\bfseries 核心语言的操作语义
 \end{center}
 
+
 \noindent
 这里的核心语言是编程语言中的 core language。AIC 与 AIV 是硬件核。本文给出一个 AI Core 上的语法、良构条件和小步语义，不改写另两份笔记中的语法与 trace 公理，也不声称与那些公理等价。
 
 \section{范围}
-
+\litao{这里说的不对，华为的不同代应该有不同的AIC、AIV比例，所以我们可以参数化d，比如 对于另一代核心，可以有 AIC， AIV1， AIV2。}
 一项程序至多包含同一个 AI Core 里的两条指令流：AIC 一条，AIV 一条。纯 AIV 或纯 AIC 的 kernel 只写其中一条。多个 AI Core 组成的 block 网格，以及卡与卡之间的 rank，不在这项里。\texttt{get\_block\_idx} 是求值时已经给定的整数。
 
+\litao{这里怎么写的这么绕呢？你到底想说什么？}
 并发有两层。一个核内部的 \texttt{set\_flag}、\texttt{wait\_flag} 和随后的 \texttt{load} 写在同一条指令序列里，不分成并行分支。\texttt{PIPE\_MTE2}、\texttt{PIPE\_V}、\texttt{PIPE\_MTE3} 等 pipe 的并行表现为各 pipe 的队列：指令进入队列后，任一已就绪的完成都可以发生。核与核之间才使用 $\parallel$。两支共享 Global Memory，各有自己的环境、核内 flag 表和 pipe 队列。UB 只出现在 AIV 的足迹里，L1 与 L0C 只出现在 AIC 的足迹里。
 
+\litao{你直接说我们不处理xxx这样的xxx这类operator不就好了？我觉得现在的文档可读性很差}
 \texttt{mmadL1} 的内部事件槽不展开。AIC 写到 Global Memory 的一次 \texttt{fixpipe} 是一条 \kw{issue}，用来表达 attention 中 AIC 与 AIV 的数据交接。
 
 \section{语法}
@@ -63,6 +71,11 @@ P ::={}
    \mid \kw{aic}\{C_1\}\parallel\kw{aiv}\{C_2\}.
 \end{aligned}
 \]
+\litao{As we just mentioned, we can generalize the syntax of P over different configurations or cores}
+\litao{if issue does not bind data results (or I presumed there should have been
+a result for address of the target, how can we know?
+Oh, I guess you meant that the target address will be passed as $\bar v$ ?)}
+\litao{What is g in the scalar[g]?}
 $\kw{issue}$ 不绑定数据结果。地址不是语法类别。存储单元
 $\mathsf{Loc}=\mathsf{Space}\times\mathbb Z$
 只出现在语义里，其中
