@@ -1,0 +1,317 @@
+\documentclass[UTF8,a4paper,11pt,fontset=fandol]{ctexart}
+\usepackage[margin=24mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,tabularx,array}
+\usepackage[unicode,hidelinks]{hyperref}
+\pagestyle{plain}
+\linespread{1.10}
+\setlength{\parskip}{0.2em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\kw}[1]{\ensuremath{\mathsf{#1}}}
+\newcommand{\infer}[2]{\displaystyle\frac{\displaystyle #1}{\displaystyle #2}}
+\hypersetup{pdftitle={Core Language Operational Semantics},pdfauthor={}}
+\begin{document}
+\begin{center}
+\Large\bfseries 核心语言的操作语义
+\end{center}
+
+\noindent
+这里的核心语言是编程语言中的 core language。AIC 与 AIV 是硬件核。本文给出一个 AI Core 上的语法、良构条件和小步语义，不改写另两份笔记中的语法与 trace 公理，也不声称与那些公理等价。
+
+\section{范围}
+
+一项程序至多包含同一个 AI Core 里的两条指令流：AIC 一条，AIV 一条。纯 AIV 或纯 AIC 的 kernel 只写其中一条。多个 AI Core 组成的 block 网格，以及卡与卡之间的 rank，不在这项里。\texttt{get\_block\_idx} 是求值时已经给定的整数。
+
+并发有两层。一个核内部的 \texttt{set\_flag}、\texttt{wait\_flag} 和随后的 \texttt{load} 写在同一条指令序列里，不分成并行分支。\texttt{PIPE\_MTE2}、\texttt{PIPE\_V}、\texttt{PIPE\_MTE3} 等 pipe 的并行表现为各 pipe 的队列：指令进入队列后，任一已就绪的完成都可以发生。核与核之间才使用 $\parallel$。两支共享 Global Memory，各有自己的环境、核内 flag 表和 pipe 队列。UB 只出现在 AIV 的足迹里，L1 与 L0C 只出现在 AIC 的足迹里。
+
+\texttt{mmadL1} 的内部事件槽不展开。AIC 写到 Global Memory 的一次 \texttt{fixpipe} 是一条 \kw{issue}，用来表达 attention 中 AIC 与 AIV 的数据交接。
+
+\section{语法}
+
+管道名分成数据管道与两个同步名。
+\[
+\begin{aligned}
+\mathsf{Pipe}_{\mathsf{AIV}}
+  &=\{\mathsf{MTE2},\mathsf{V},\mathsf{MTE3}\},\\
+\mathsf{Pipe}_{\mathsf{AIC}}
+  &=\{\mathsf{MTE1},\mathsf{M},\mathsf{FIX}\},\\
+\mathsf{SyncName}
+  &=\{\mathsf{S},\mathsf{ALL}\}.
+\end{aligned}
+\]
+$d$ 取值 $\mathsf{AIV}$ 或 $\mathsf{AIC}$。$p,q$ 取自相应的数据管道或同步名，由各条规则限定。
+
+值的类别是 $\tau::=\mathsf{int}\mid\mathsf{float}\mid\mathsf{bool}\mid\mathsf{event}\mid\mathsf{view}$。常量 $c$ 按字面带有其中一种类别，$x$ 是变量，$v$ 是常量或变量，$\bar v$ 是有限序列。$\kw{end}$ 只作为 \kw{for} 循环体的迭代结束标记。
+\[
+\begin{aligned}
+C ::={}
+  &\ \kw{return}(\bar v)
+   \mid \kw{end}\\
+  &\mid \kw{let}\ x=\kw{scalar}[g](\bar v)\ \kw{in}\ C\\
+  &\mid \kw{issue}[p](f,\bar v);\ C\\
+  &\mid \kw{setflag}[p,q](v);\ C
+   \mid \kw{waitflag}[p,q](v);\ C\\
+  &\mid \kw{pipebarrier}[p];\ C\\
+  &\mid \kw{syncblockset}[p,q](v);\ C
+   \mid \kw{syncblockwait}[p,q](v);\ C\\
+  &\mid \kw{if}\ v\ \kw{then}\ \{C_1\}\ \kw{else}\ \{C_2\}\\
+  &\mid \kw{for}\ x=v_1\ \kw{to}\ v_2\ \kw{step}\ v_3\ \kw{do}\ \{C_1\};\ C_2,\\[0.3em]
+P ::={}
+  &\ \kw{aiv}\{C\}
+   \mid \kw{aic}\{C\}
+   \mid \kw{aic}\{C_1\}\parallel\kw{aiv}\{C_2\}.
+\end{aligned}
+\]
+$\kw{issue}$ 不绑定数据结果。地址不是语法类别。存储单元
+$\mathsf{Loc}=\mathsf{Space}\times\mathbb Z$
+只出现在语义里，其中
+$\mathsf{Space}=\{\mathsf{GM},\mathsf{UB},\mathsf{L1},\mathsf{L0C}\}$。
+
+\section{良构}
+
+$\Gamma$ 把有限个变量映到类别。标量算子由 $\Delta(g)=(\bar\tau,\tau)$ 给出参数类别和结果类别。数据算子由 $\Sigma(f,p)=\bar\tau$ 给出：在管道 $p$ 上发射 $f$ 时参数应有的类别。两支 $\parallel$ 各自从空环境推导，环境不共享。
+
+\[
+\begin{gathered}
+\infer{\Gamma(x)=\tau}{\Gamma\vdash x:\tau}
+\qquad
+\infer{c\ \text{的类别为}\ \tau}{\Gamma\vdash c:\tau}\\[1.1em]
+\infer{
+  \Delta(g)=(\bar\tau,\tau)
+  \quad
+  \Gamma\vdash\bar v:\bar\tau
+  \quad
+  x\notin\mathrm{dom}(\Gamma)
+  \quad
+  \Gamma,x:\tau\vdash_d C
+}{
+  \Gamma\vdash_d \kw{let}\ x=\kw{scalar}[g](\bar v)\ \kw{in}\ C
+}\\[1.1em]
+\infer{
+  p\in\mathsf{Pipe}_d
+  \quad
+  \Sigma(f,p)=\bar\tau
+  \quad
+  \Gamma\vdash\bar v:\bar\tau
+  \quad
+  \Gamma\vdash_d C
+}{
+  \Gamma\vdash_d \kw{issue}[p](f,\bar v);\ C
+}
+\end{gathered}
+\]
+
+核内同步要求两端都是本核的数据管道，且 $p\neq q$。块同步的置位命令要求置位管道 $p$ 属于本核；等待管道可以是 $\mathsf{S}$。等待命令出现在执行等待的那一侧，因此 $p$ 可以是另一核的数据管道。
+\[
+\begin{gathered}
+\infer{
+  p,q\in\mathsf{Pipe}_d
+  \quad p\neq q
+  \quad
+  \Gamma\vdash v:\mathsf{event}
+  \quad
+  \Gamma\vdash_d C
+}{
+  \Gamma\vdash_d \kw{setflag}[p,q](v);\ C
+}\\[1.0em]
+\infer{
+  p\in\mathsf{Pipe}_d
+  \quad
+  q\in\mathsf{Pipe}_d\cup\{\mathsf{S}\}
+  \quad p\neq q
+  \quad
+  \Gamma\vdash v:\mathsf{event}
+  \quad
+  \Gamma\vdash_d C
+}{
+  \Gamma\vdash_d \kw{syncblockset}[p,q](v);\ C
+}
+\end{gathered}
+\]
+$\kw{waitflag}$ 与 $\kw{setflag}$ 的前提相同。$\kw{syncblockwait}[p,q](v)$ 要求 $q\in\mathsf{Pipe}_d\cup\{\mathsf{S}\}$、$p\neq q$，并且 $v$ 为 $\mathsf{event}$；$p$ 不必属于 $d$。$\kw{pipebarrier}[p]$ 要求 $p\in\mathsf{Pipe}_d\cup\{\mathsf{ALL}\}$。
+
+$\kw{if}$ 的条件为 $\mathsf{bool}$，两支在同一个 $\Gamma$ 下良构。$\kw{for}$ 的三个界为 $\mathsf{int}$，循环变量是新名字，循环体与循环后的命令都良构。循环体不含 $\kw{for}$。循环体里每条不以 $\kw{return}$ 结束的路径以 $\kw{end}$ 结束。$\kw{end}$ 与 $\kw{return}(\bar v)$ 在任意 $\Gamma$ 下良构。
+\[
+\infer{
+  \varnothing\vdash_{\mathsf{AIC}} C_1
+  \quad
+  \varnothing\vdash_{\mathsf{AIV}} C_2
+}{
+  \vdash \kw{aic}\{C_1\}\parallel\kw{aiv}\{C_2\}
+}
+\]
+单独一支 $\kw{aiv}\{C\}$ 或 $\kw{aic}\{C\}$ 要求相应的空环境推导。良构不要求 flag 已经置位，不要求存储已初始化，也不要求足迹互不相交。缺少同步的程序仍是合法项。
+
+\section{状态与参数}
+
+一个核的队列 $Q_d$ 把该核的每条数据管道映到有限序列。队列项是
+\[
+\begin{aligned}
+\iota ::={}
+  &\ \kw{op}(f,R,W)
+   \mid \kw{set}(q,\varepsilon)
+   \mid \kw{wait}(p,\varepsilon)\\
+  &\mid \kw{bar}
+   \mid \kw{bset}(q,\varepsilon)
+   \mid \kw{bwait}(p,\varepsilon).
+\end{aligned}
+\]
+$R,W$ 是有限的 $\mathsf{Loc}$ 集合。存储 $\mu$ 把 $\mathsf{Loc}$ 部分映到 $\mathsf{Uninit}$ 或值。每个核有自己的核内 flag 表 $\varphi_d$，两个核共用块同步表 $\beta$。二者都把数据管道、等待管道与事件标识映到 $\{0,1\}$，初值为 $0$。
+
+配置含共享的 $\mu$ 与 $\beta$，以及每一侧的 $\varphi_d$、$Q_d$、环境 $\rho_d$ 和控制 $C_d$。单独一支程序只有一侧。实例化提供三个部分。$\mathsf{eval}_g$ 在与 $\Delta(g)$ 相符的值上得到结果。$\mathsf{foot}(f,\bar\nu)=(R,W)$ 给出足迹，并且满足 $R\cup W\subseteq\mathsf{Loc}_d$：AIV 只使用 $\mathsf{GM}$ 与 $\mathsf{UB}$，AIC 只使用 $\mathsf{GM}$、$\mathsf{L1}$ 与 $\mathsf{L0C}$。关系 $F(f,\mu|_R,\mu')$ 成立时，$\mu'$ 与 $\mu$ 只在 $W$ 上不同。$F$ 可以有多个结果。
+
+队列中位于等待项或屏障项之后的项尚未打开。$\kw{op}$ 在自身已经打开时可以完成，不要求位于队首。$\kw{set}$、$\kw{bset}$ 与 $\kw{bar}$ 只有在前面的项都已离开队列时才能完成。
+
+\section{小步规则}
+
+一步只前进一个核，可以改写共享的 $\mu$ 与 $\beta$。下面省去未改变的分量。控制规则使用当前环境 $\rho$。
+
+标量求值后继续。$\kw{if}$ 按布尔值进入一支。$\kw{return}$ 没有控制后继；该核的队列仍可完成。
+\[
+\infer{
+  \bar\nu=\rho(\bar v)
+  \quad
+  \mathsf{eval}_g(\bar\nu)=\nu
+}{
+  \kw{let}\ x=\kw{scalar}[g](\bar v)\ \kw{in}\ C
+  \longrightarrow
+  \rho[x\mapsto\nu],\ C
+}
+\]
+
+发射把一项加到目标管道的队尾，控制立即继续。足迹在发射时确定。$\mathsf{foot}$ 或 $\mathsf{eval}$ 没有结果时，相应的控制规则不启用。
+\[
+\infer{
+  \mathsf{foot}(f,\rho(\bar v))=(R,W)
+}{
+  Q(p),\ 
+  \kw{issue}[p](f,\bar v);\ C
+  \longrightarrow
+  Q(p){\cdot}\kw{op}(f,R,W),\ 
+  C
+}
+\]
+$\kw{setflag}[p,q](\varepsilon)$ 把 $\kw{set}(q,\varepsilon)$ 放入 $p$。$\kw{waitflag}[p,q](\varepsilon)$ 把 $\kw{wait}(p,\varepsilon)$ 放入 $q$，不挡住发射流。$\kw{pipebarrier}[p]$ 在 $p$ 放入 $\kw{bar}$；$p=\mathsf{ALL}$ 时在本核每条数据管道放入 $\kw{bar}$。$\kw{syncblockset}[p,q](\varepsilon)$ 把 $\kw{bset}(q,\varepsilon)$ 放入 $p$。等待管道不是 $\mathsf{S}$ 的 $\kw{syncblockwait}$ 把 $\kw{bwait}$ 放入本核的等待管道。
+
+等待管道为 $\mathsf{S}$ 时，块等待留在控制位置，该核不能再发射。令牌为 $1$ 时消耗令牌并继续。另一核以及本核已经入队的完成不受这条约制。
+\[
+\infer{
+  \beta(p,\mathsf{S},\varepsilon)=1
+}{
+  \beta,\ 
+  \kw{syncblockwait}[p,\mathsf{S}](\varepsilon);\ C
+  \longrightarrow
+  \beta[(p,\mathsf{S},\varepsilon)\mapsto 0],\ 
+  C
+}
+\]
+
+数据项完成时读取当时的 $\mu|_R$。其中可以有 $\mathsf{Uninit}$，也可以有更早写入的值。规则不检查其他在途指令。
+\[
+\infer{
+  \kw{op}(f,R,W)\ \text{已打开}
+  \quad
+  F(f,\mu|_R,\mu')
+}{
+  \mu,\ Q
+  \longrightarrow
+  \mu',\ Q\setminus\kw{op}(f,R,W)
+}
+\]
+$\kw{set}(q,\varepsilon)$ 位于 $p$ 的队首且 $\varphi_d(p,q,\varepsilon)=0$ 时，该项离开队列，令牌改为 $1$。$\varphi_d$ 已为 $1$ 时这条规则不启用。$\kw{wait}(p,\varepsilon)$ 在 $q$ 上已经打开且令牌为 $1$ 时离开队列，令牌改回 $0$；令牌为 $0$ 时不启用。打开条件使排在等待后面的同管道项不能先完成。$\kw{bar}$ 只在位于队首时离开。$\kw{bset}$ 与 $\kw{set}$ 相同，但读写的是 $\beta$。$\kw{bwait}$ 与 $\kw{wait}$ 相同，同样读写 $\beta$。核内表 $\varphi_d$ 与块同步表 $\beta$ 不混用。
+
+循环按整数范围展开。$k_3>0$ 且 $k_1<k_2$ 时，把循环体中的 $\kw{end}$ 换成下一次迭代，并绑定本轮的 $x$。范围为空时进入循环后的命令。$C\triangleright D$ 表示这个替换；$\kw{return}$ 保持不变，$\kw{if}$ 的两支分别替换。
+\[
+\infer{
+  \rho(v_i)=k_i
+  \quad
+  k_3>0
+  \quad
+  k_1<k_2
+}{
+  \kw{for}\ x=v_1\ \kw{to}\ v_2\ \kw{step}\ v_3\ \kw{do}\ \{C\};\ C'
+  \longrightarrow
+  \kw{let}\ x=k_1\ \kw{in}\ 
+  C\triangleright R
+}
+\]
+其中 $R$ 是下界改为 $k_1+k_3$ 的同一个 \kw{for}。负步长与范围为空的规则方向相反，写法相同。
+
+这些规则不产生名为竞争或死锁的结论。令牌仍为 $0$ 的等待没有完成步骤；该核的后续同管道项保持关闭。另一核可以继续。
+
+\section{与 HIVM 的对应}
+
+本节的 $\Delta$、$\Sigma$、$F$ 和 $\mathsf{foot}$ 只覆盖两个例子用到的算子。复制关系 $F_{\mathrm{copy}}$ 按足迹中的对应单元传递当前内容，包括 $\mathsf{Uninit}$。
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}llY@{}}
+\toprule
+HIVM & 核心形式 & 实例 \\
+\midrule
+\texttt{arith}、视图构造、\texttt{get\_block\_idx}
+  & $\kw{scalar}[g]$
+  & $\Delta$ 与 $\mathsf{eval}$ \\
+\texttt{load}
+  & $\kw{issue}[\mathsf{MTE2}](\kw{Copy},\ldots)$
+  & $F_{\mathrm{copy}}$，GM 到 UB \\
+\texttt{store}
+  & $\kw{issue}[\mathsf{MTE3}](\kw{Copy},\ldots)$
+  & $F_{\mathrm{copy}}$，UB 到 GM \\
+\texttt{fixpipe}
+  & $\kw{issue}[\mathsf{FIX}](\kw{Fixpipe},\ldots)$
+  & $F_{\mathrm{copy}}$，L0C 到 GM \\
+向量函数 \texttt{vf\_3}
+  & $\kw{issue}[\mathsf{V}](\kw{MulAdd},\ldots)$
+  & 三块输入都是值时按乘加写入目的地；含 $\mathsf{Uninit}$ 时目的地记为 $\mathsf{Uninit}$ \\
+\texttt{set\_flag}、\texttt{wait\_flag}、\texttt{pipe\_barrier}
+  & 同名核内命令
+  & 本核的 $\varphi_d$ 与队列 \\
+\texttt{sync\_block\_set}、\texttt{sync\_block\_wait}
+  & $\kw{syncblockset}$、$\kw{syncblockwait}$
+  & 共用的 $\beta$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{一个 AIV 上的乘加}
+
+\texttt{debug-memory.mlir} 中的 \texttt{@mul\_add\_kernel} 是单独的 AIV，没有 \texttt{sync\_block}。三次装载分别使用事件 $0,1,2$。下面写出事件 $0$ 的一次装载，以及随后的乘加和两次写回；另外两次装载只更换事件和视图。源程序里由运行时决定的 \texttt{scf.if} 在进入该项之前取定分支，\texttt{set\_ctrl} 不进入语言。动态长度已经算进视图。
+\[
+\begin{aligned}
+&\kw{aiv}\{
+  \kw{setflag}[\mathsf{V},\mathsf{MTE2}](\varepsilon_0);\\
+&\quad\kw{waitflag}[\mathsf{V},\mathsf{MTE2}](\varepsilon_0);
+  \kw{issue}[\mathsf{MTE2}](\kw{Copy},g_0,u_0);\\
+&\quad\kw{setflag}[\mathsf{MTE2},\mathsf{V}](\varepsilon_0);
+  \kw{waitflag}[\mathsf{MTE2},\mathsf{V}](\varepsilon_0);\\
+&\quad\kw{issue}[\mathsf{V}](\kw{MulAdd},u_0,u_1,u_2,u_3);\\
+&\quad\kw{setflag}[\mathsf{V},\mathsf{MTE3}](\varepsilon_0);
+  \kw{waitflag}[\mathsf{V},\mathsf{MTE3}](\varepsilon_0);\\
+&\quad\kw{issue}[\mathsf{MTE3}](\kw{Copy},u_3,g_3);
+  \kw{issue}[\mathsf{MTE3}](\kw{Copy},u_3,g_4);\\
+&\quad\kw{pipebarrier}[\mathsf{ALL}];
+  \kw{return}()\}.
+\end{aligned}
+\]
+\texttt{vf\_3} 内部的 AVE 装载、乘法和加法都包在同一次 $\kw{MulAdd}$ 里。去掉 $\mathsf{MTE2}\to\mathsf{V}$ 这一对后，乘加项仍可在装载完成前打开并完成。它读到的是当时 UB 中的值。若那些单元仍是装载前的内容，写回 Global Memory 的就是这些内容的乘加结果。这是一次普通的完成步骤。
+
+\subsection{AIC 与 AIV 的一次交接}
+
+这次交接取自 \texttt{attention\_hivm\_lowered.mlir}。AIC 一侧的函数是 \texttt{\_attn\_fwd\_mix\_aic}。它用 \texttt{fixpipe} 写入 workspace，再执行 \texttt{sync\_block\_set}：核类型为 \texttt{CUBE}，管道为 \texttt{PIPE\_FIX} 与 \texttt{PIPE\_S}，flag 为 0。AIV 一侧的函数是 \texttt{\_attn\_fwd\_mix\_aiv}。它先执行管道和 flag 相同、核类型为 \texttt{VECTOR} 的 \texttt{sync\_block\_wait}，再把 workspace 装入 UB。源指令中的核类型由命令所在的一侧表达。下面只保留这一次交接，不展开 \texttt{mmadL1}、\texttt{nd2nz} 和 FFTS 基址。L0C 中的值是 \texttt{fixpipe} 的输入。
+\[
+\begin{aligned}
+&\kw{aic}\{
+  \kw{issue}[\mathsf{FIX}](\kw{Fixpipe},\ell,w);
+  \kw{syncblockset}[\mathsf{FIX},\mathsf{S}](\varepsilon_0);
+  \kw{return}()\}\\
+&\parallel
+  \kw{aiv}\{
+  \kw{syncblockwait}[\mathsf{FIX},\mathsf{S}](\varepsilon_0);
+  \kw{issue}[\mathsf{MTE2}](\kw{Copy},w,u);
+  \kw{return}()\}.
+\end{aligned}
+\]
+$\kw{syncblockset}$ 要等同一条 \texttt{PIPE\_FIX} 队列里排在它前面的 \texttt{fixpipe} 离开之后才把 $\beta(\mathsf{FIX},\mathsf{S},\varepsilon_0)$ 置为 $1$。AIV 的等待管道是 $\mathsf{S}$，因此在令牌变为 $1$ 之前，AIV 不能发射后面的 \texttt{load}。去掉这条 $\kw{syncblockwait}$ 后，AIV 可以先发射并完成装载，读到 \texttt{fixpipe} 写入之前 workspace 里的内容。
+
+\end{document}
