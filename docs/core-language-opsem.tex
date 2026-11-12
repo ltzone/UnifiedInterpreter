@@ -297,6 +297,15 @@ $\Sigma_{\mathcal H}(d,p,f)$ 是部分签名表，其定义域指定允许发射
 循环步长非零、无竞争或无死锁；这些属于后续动态语义、配置约束或验证目标。
 缺少同步的程序仍可通过基本类型检查，从而让语义暴露其错误执行。
 
+\paragraph{TODO：跨核同步与同步标识符（待仔细考虑）。}
+双 AIV 到 AIC 的汇聚、AIC 到双 AIV 的通知，以及不同硬件代际的
+\texttt{CrossCore} 模式、参与者和令牌消费行为，仍需逐项核对 API 与实现；
+当前 $B_{\mathcal H}$、$\mathsf{Targets}_{\mathcal H}$ 和 $\beta_t$ 的规则保留为待核实的模型，
+不据此认定这些情形在各代硬件上具有相同行为。
+另待考虑：是否把 set/wait 的源端、目标端和 event 合并抽象为一个同步 identifier，
+由配置解释其参与者与匹配关系，而非直接使用 $(p,q,\varepsilon)$。
+本 TODO 不改变下述既有语法、状态或转移规则，留待 Litao 决定。
+
 \section{状态与参数}
 
 一个指令流 $s\in\kappa$ 的队列 $Q_s$ 把 $\mathsf{Pipe}_{\mathsf{kind}(s)}$ 中每条数据管道映到有限序列。队列项是
